@@ -13,7 +13,7 @@ PR タイトルや `workflow_dispatch` 入力、Issue タイトルなど **外�
 
 特に `pull_request_target` のように Secrets が利用できるイベントでは影響が大きくなります。
 
-## このリポジトリでの検証方法
+## このリポジトリでの検証手順
 
 ワークフローは [.github/workflows/investigate_vars.yaml](.github/workflows/investigate_vars.yaml) にあります。
 
@@ -24,3 +24,5 @@ PR タイトルや `workflow_dispatch` 入力、Issue タイトルなど **外�
 	 - `poc $(uname -a >&2)`
 
 3. PR を作る/更新すると Actions が走るのでログを確認します
+```
+```
