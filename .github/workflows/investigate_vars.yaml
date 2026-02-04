@@ -1,0 +1,62 @@
+
+name: Investigate Variables on Workflow
+
+on:
+  pull_request:
+
+jobs:
+  test1:
+    name: Run test1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run test1
+        shell: bash
+        run: echo "${{ github.event.pull_request.title }}"
+
+  test2:
+    name: Run test2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run test2
+        shell: bash
+        run: echo ${{ github.event.pull_request.title }}
+
+  test3:
+    name: Run test3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run test3
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$TITLE"
+
+  test4:
+    name: Run test4
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run test4
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: echo $TITLE
+
+  test5:
+    name: Run test5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run test5
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE"
