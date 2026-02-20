@@ -1,0 +1,148 @@
+name: Simple Command Injection Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      malicious_input:
+        description: 'Test input (try: test"; whoami #)'
+        required: true
+        default: 'safe-input'
+
+permissions:
+  contents: read
+
+jobs:
+  # パターン1: 直接 ${{ }} を使う（最も危険）
+  pattern-1-direct:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "🔴 Pattern 1: Direct \${{ }} in run (MOST DANGEROUS)"
+        run: |
+          echo "=========================================="
+          echo "Pattern 1: Direct interpolation"
+          echo "Input value: ${{ inputs.malicious_input }}"
+          echo "=========================================="
+          result="$(echo 'Processing: ${{ inputs.malicious_input }}')"
+          echo "Result: ${result}"
+          echo ""
+
+  # パターン2: env経由 + コマンド置換（まだ危険）
+  pattern-2-env-with-substitution:
+    runs-on: ubuntu-latest
+    env:
+      MALICIOUS_INPUT: ${{ inputs.malicious_input }}
+    steps:
+      - name: "🔴 Pattern 2: env + command substitution (STILL DANGEROUS)"
+        run: |
+          echo "=========================================="
+          echo "Pattern 2: env with \$(...)"
+          echo "Input from env: ${MALICIOUS_INPUT}"
+          echo "=========================================="
+          result="$(echo "Processing: ${MALICIOUS_INPUT}")"
+          echo "Result: ${result}"
+          echo ""
+
+  # パターン3: env経由のみ（安全）
+  pattern-3-env-safe:
+    runs-on: ubuntu-latest
+    env:
+      MALICIOUS_INPUT: ${{ inputs.malicious_input }}
+    steps:
+      - name: "✅ Pattern 3: env without command substitution (SAFE)"
+        run: |
+          echo "=========================================="
+          echo "Pattern 3: env without \$(...)"
+          echo "Input from env: ${MALICIOUS_INPUT}"
+          echo "=========================================="
+          # コマンド置換を使わずに直接使用
+          echo "Direct use: ${MALICIOUS_INPUT}"
+          echo ""
+
+  # パターン4: env + if文（最も安全）
+  pattern-4-env-with-if:
+    runs-on: ubuntu-latest
+    env:
+      MALICIOUS_INPUT: ${{ inputs.malicious_input }}
+    steps:
+      - name: "✅ Pattern 4: env with if statement (SAFEST)"
+        run: |
+          echo "=========================================="
+          echo "Pattern 4: env with if"
+          echo "Input from env: ${MALICIOUS_INPUT}"
+          echo "=========================================="
+          if echo "${MALICIOUS_INPUT}" | grep -q .; then
+            echo "Input is not empty"
+          else
+            echo "Input is empty"
+          fi
+          echo ""
+
+  # 比較テスト
+  comparison-test:
+    runs-on: ubuntu-latest
+    needs: [pattern-1-direct, pattern-2-env-with-substitution, pattern-3-env-safe, pattern-4-env-with-if]
+    if: always()
+    env:
+      TEST_INPUT: ${{ inputs.malicious_input }}
+    steps:
+      - name: "Create comparison report"
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # Command Injection Test Comparison
+
+          ## Test Input
+          ```
+          ${{ inputs.malicious_input }}
+          ```
+
+          ## Results Summary
+
+          | Pattern | Method | Safety | Notes |
+          |---------|--------|--------|-------|
+          | 1 | `${{ }}` in run | 🔴 DANGEROUS | Shell interprets immediately |
+          | 2 | `env` + `$(...)` | 🔴 DANGEROUS | Command substitution re-interprets |
+          | 3 | `env` only | ✅ SAFE | No re-interpretation |
+          | 4 | `env` + `if` | ✅ SAFE | Direct conditional |
+
+          ## Try These Test Inputs
+
+          ### Safe Input
+          ```
+          safe-input
+          ```
+
+          ### Injection Attempts (for testing)
+          ```
+          test"; echo INJECTED #
+          test$(whoami)test
+          test && echo INJECTED
+          ```
+
+          ## Key Takeaway
+
+          **Using `env:` is necessary but not sufficient!**
+
+          - ❌ `result=$(command "${ENV_VAR}")` ← Still vulnerable
+          - ✅ `if command "${ENV_VAR}"; then` ← Safe
+          - ✅ `echo "${ENV_VAR}"` ← Safe
+
+          The difference is whether the shell **re-interprets** the variable value.
+          EOF
+
+      - name: "Detailed explanation"
+        run: |
+          echo "=========================================="
+          echo "Why is Pattern 2 still dangerous?"
+          echo "=========================================="
+          echo ""
+          echo "Even with env, this happens:"
+          echo "1. GitHub sets: MALICIOUS_INPUT='test\"; echo INJECTED #'"
+          echo "2. Shell sees: result=\"\$(echo \"Processing: \${MALICIOUS_INPUT}\")\""
+          echo "3. Shell expands: result=\"\$(echo \"Processing: test\"; echo INJECTED #\")\""
+          echo "4. Shell executes inside \$():"
+          echo "   - echo \"Processing: test\""
+          echo "   - echo INJECTED"
+          echo "   - # (comment)"
+          echo ""
+          echo "The \$(...) causes the shell to re-interpret!"
+          echo ""

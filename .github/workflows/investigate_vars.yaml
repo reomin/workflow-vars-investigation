@@ -60,3 +60,22 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$TITLE"
+  
+  test6:
+    name: Run test6
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Prepare helper script
+        shell: bash
+        run: chmod +x ./tools/ci/helper/wait-archive-creation.sh
+      - name: Run test6 (direct)
+        shell: bash
+        run: ./tools/ci/helper/wait-archive-creation.sh "${{ github.event.pull_request.title }}" "${{ github.event.pull_request.merge_commit_sha }}"
+      - name: Run test6 (via env)
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.title }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: ./tools/ci/helper/wait-archive-creation.sh "$BASE_REF" "$MERGE_SHA"

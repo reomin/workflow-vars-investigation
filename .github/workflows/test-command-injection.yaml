@@ -1,0 +1,248 @@
+name: Test Command Injection Behavior
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_input:
+        description: 'Test input string (try: normal, or malicious like "test"; echo INJECTED #)'
+        required: true
+        default: 'safe-input'
+
+permissions:
+  contents: read
+
+jobs:
+  # 危険なパターン1: ${{ }} を run: 内で直接使用
+  test-direct-interpolation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "🔴 UNSAFE: Direct interpolation in run"
+        run: |
+          echo "=== Test 1: Direct \${{ }} in run (UNSAFE) ==="
+          echo "Input: ${{ inputs.test_input }}"
+          echo "Result: $(echo "Processing: ${{ inputs.test_input }}")"
+          echo "---"
+
+  # 危険なパターン2: env経由だがコマンド置換内で使用
+  test-env-with-command-substitution:
+    runs-on: ubuntu-latest
+    env:
+      TEST_INPUT: ${{ inputs.test_input }}
+    steps:
+      - name: "🔴 UNSAFE: env with command substitution"
+        run: |
+          echo "=== Test 2: env with \$(.....)  (UNSAFE) ==="
+          echo "Input from env: ${TEST_INPUT}"
+          echo "Result with command substitution: $(echo "Processing: ${TEST_INPUT}")"
+          echo "---"
+
+  # 危険なパターン3: env経由だが && や || と組み合わせ
+  test-env-with-logical-operators:
+    runs-on: ubuntu-latest
+    env:
+      TEST_INPUT: ${{ inputs.test_input }}
+    steps:
+      - name: "🟡 POTENTIALLY UNSAFE: env with logical operators"
+        run: |
+          echo "=== Test 3: env with && (POTENTIALLY UNSAFE) ==="
+          echo "Input: ${TEST_INPUT}"
+          result=$(echo "${TEST_INPUT}" && echo "Second command")
+          echo "Result: ${result}"
+          echo "---"
+
+  # 安全なパターン1: env経由でコマンド置換なし
+  test-env-safe:
+    runs-on: ubuntu-latest
+    env:
+      TEST_INPUT: ${{ inputs.test_input }}
+    steps:
+      - name: "✅ SAFE: env without command substitution"
+        run: |
+          echo "=== Test 4: env without command substitution (SAFE) ==="
+          echo "Input: ${TEST_INPUT}"
+          echo "Direct echo: ${TEST_INPUT}"
+
+          # コマンドの引数として使用
+          grep -c "test" <<< "${TEST_INPUT}" || echo "Not found"
+          echo "---"
+
+  # 安全なパターン2: if文での使用
+  test-env-with-if:
+    runs-on: ubuntu-latest
+    env:
+      TEST_INPUT: ${{ inputs.test_input }}
+    steps:
+      - name: "✅ SAFE: env with if statement"
+        run: |
+          echo "=== Test 5: env with if (SAFE) ==="
+          echo "Input: ${TEST_INPUT}"
+
+          if echo "${TEST_INPUT}" | grep -q "test"; then
+            echo "Found 'test' in input"
+          else
+            echo "Did not find 'test' in input"
+          fi
+          echo "---"
+
+  # 実際の攻撃シミュレーション（安全な環境で）
+  test-injection-attempt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "🔴 Simulate injection with direct interpolation"
+        run: |
+          echo "=== Test 6: Injection simulation (direct) ==="
+          echo "Input: ${{ inputs.test_input }}"
+
+          # このパターンは危険
+          result="$(echo 'Command output: ${{ inputs.test_input }}')"
+          echo "Result: ${result}"
+          echo "---"
+
+      - name: "✅ Same input with safe pattern"
+        env:
+          TEST_INPUT: ${{ inputs.test_input }}
+        run: |
+          echo "=== Test 7: Same input with safe pattern ==="
+          echo "Input: ${TEST_INPUT}"
+
+          # この方法なら安全
+          if echo "${TEST_INPUT}" | grep -q .; then
+            echo "Input is not empty"
+          fi
+          echo "---"
+
+  # リアルな攻撃ペイロード例のテスト
+  test-common-payloads:
+    runs-on: ubuntu-latest
+    env:
+      PAYLOAD_1: 'normal input'
+      PAYLOAD_2: 'test"; echo INJECTED #'
+      PAYLOAD_3: 'test$(whoami)test'
+      PAYLOAD_4: 'test`id`test'
+      PAYLOAD_5: 'test && echo INJECTED || echo'
+    steps:
+      - name: "Test various payloads - UNSAFE pattern"
+        run: |
+          echo "=== Testing common attack payloads - UNSAFE ==="
+
+          echo "Payload 1 (normal):"
+          echo "Result: $(echo "${PAYLOAD_1}")"
+
+          echo "Payload 2 (semicolon):"
+          echo "Result: $(echo "${PAYLOAD_2}")"
+
+          echo "Payload 3 (command substitution \$()):"
+          echo "Result: $(echo "${PAYLOAD_3}")"
+
+          echo "Payload 4 (backticks):"
+          echo "Result: $(echo "${PAYLOAD_4}")"
+
+          echo "Payload 5 (logical operators):"
+          echo "Result: $(echo "${PAYLOAD_5}")"
+          echo "---"
+
+      - name: "Test same payloads - SAFE pattern"
+        run: |
+          echo "=== Testing same payloads - SAFE ==="
+
+          echo "Payload 1: ${PAYLOAD_1}"
+          echo "Payload 2: ${PAYLOAD_2}"
+          echo "Payload 3: ${PAYLOAD_3}"
+          echo "Payload 4: ${PAYLOAD_4}"
+          echo "Payload 5: ${PAYLOAD_5}"
+          echo "---"
+
+  # 実際のユースケースの比較
+  test-real-world-scenario:
+    runs-on: ubuntu-latest
+    env:
+      USER_INPUT: ${{ inputs.test_input }}
+    steps:
+      - name: "Setup test environment"
+        run: |
+          echo "test-data" > /tmp/test-file.txt
+          echo "Setup complete"
+
+      - name: "🔴 UNSAFE: Check file with command substitution"
+        run: |
+          echo "=== Real-world test: File check (UNSAFE) ==="
+          echo "Input: ${USER_INPUT}"
+
+          # 危険なパターン
+          found="$(grep -c "${USER_INPUT}" /tmp/test-file.txt || echo 0)"
+          echo "Found count: ${found}"
+          echo "---"
+
+      - name: "✅ SAFE: Check file without command substitution"
+        run: |
+          echo "=== Real-world test: File check (SAFE) ==="
+          echo "Input: ${USER_INPUT}"
+
+          # 安全なパターン
+          if grep -q "${USER_INPUT}" /tmp/test-file.txt; then
+            echo "Found in file"
+          else
+            echo "Not found in file"
+          fi
+          echo "---"
+
+  # まとめレポート
+  summary-report:
+    runs-on: ubuntu-latest
+    needs: [
+      test-direct-interpolation,
+      test-env-with-command-substitution,
+      test-env-with-logical-operators,
+      test-env-safe,
+      test-env-with-if,
+      test-injection-attempt,
+      test-common-payloads,
+      test-real-world-scenario
+    ]
+    if: always()
+    steps:
+      - name: "Generate summary"
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # Command Injection Test Results
+
+          ## Test Input
+          `${{ inputs.test_input }}`
+
+          ## Patterns Tested
+
+          ### 🔴 Unsafe Patterns
+          1. **Direct `${{ }}` in run**: Immediately dangerous
+          2. **env + `$(...)` command substitution**: Still vulnerable
+          3. **env + logical operators**: Potentially vulnerable
+
+          ### ✅ Safe Patterns
+          1. **env without command substitution**: Safe
+          2. **env with if statement**: Safe
+          3. **env as command arguments**: Safe
+
+          ## Key Findings
+
+          - Using `env:` **alone is not enough** to prevent injection
+          - Command substitution `$(...)` re-interprets shell metacharacters
+          - Direct `if` statements are safer than command substitution
+          - Always quote variables: `"${VAR}"`
+
+          ## Recommendations
+
+          ✅ **DO**: Use `env:` + direct commands or `if` statements
+          ❌ **DON'T**: Use `$(...)` or backticks with external input
+          ❌ **DON'T**: Use `${{ }}` directly in `run:` blocks
+
+          ## Example Safe Pattern
+
+          \`\`\`yaml
+          env:
+            USER_INPUT: \${{ github.event.input }}
+          steps:
+            - run: |
+                if command "\${USER_INPUT}"; then
+                  echo "success"
+                fi
+          \`\`\`
+          EOF
