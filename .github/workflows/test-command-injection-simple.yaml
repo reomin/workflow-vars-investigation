@@ -57,15 +57,23 @@ jobs:
     env:
       MALICIOUS_INPUT: ${{ inputs.malicious_input }}
     steps:
-      - name: "✅ Pattern 3: env without command substitution (SAFE)"
+      - name: "🟡 Pattern 3: env only (DANGEROUS IF EXECUTED)"
         run: |
           echo "=========================================="
-          echo "Pattern 3: env without \$(...)"
+          echo "Pattern 3: env only (safe as data, dangerous as code)"
           echo "Input from env: ${MALICIOUS_INPUT}"
           echo "=========================================="
-          # コマンド置換を使わずに直接使用
+          echo "Safe usage (treat as data):"
           echo "Direct use: ${MALICIOUS_INPUT}"
           echo ""
+
+          echo "Unsafe usage example (treat input as a command):"
+          echo "- This executes the first word of the input as a command"
+          echo "- It is NOT about ';' or '&&' (those won't be re-parsed here)"
+          set +e
+          # Unquoted expansion -> word-splitting -> turns user input into argv
+          set -- ${MALICIOUS_INPUT}
+          "$@"
 
   # パターン4: env + if文（最も安全）
   pattern-4-env-with-if:
@@ -76,13 +84,21 @@ jobs:
       - name: "✅ Pattern 4: env with if statement (SAFEST)"
         run: |
           echo "=========================================="
-          echo "Pattern 4: env with if"
+          echo "Pattern 4: allowlist validation (recommended)"
           echo "Input from env: ${MALICIOUS_INPUT}"
           echo "=========================================="
-          if echo "${MALICIOUS_INPUT}" | grep -q .; then
-            echo "Input is not empty"
+          echo "Allowed pattern: ^[A-Za-z0-9_.-]+$"
+          if [[ -z "${MALICIOUS_INPUT}" ]]; then
+            echo "Rejected: input is empty"
+            exit 1
+          fi
+
+          if [[ "${MALICIOUS_INPUT}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "Accepted: input matches allowlist"
+            echo "Safe usage example: echo \"${MALICIOUS_INPUT}\""
           else
-            echo "Input is empty"
+            echo "Rejected: input contains disallowed characters"
+            exit 1
           fi
           echo ""
 
@@ -111,7 +127,7 @@ jobs:
           | 1 | `$ {{ }}` in run | 🔴 DANGEROUS | Shell interprets immediately |
           | 2 | `env` + `bash -c "...${VAR}..."` | 🔴 DANGEROUS | Input gets re-parsed as code |
           | 3 | `env` only | ✅ SAFE | No re-interpretation |
-          | 4 | `env` + `if` | ✅ SAFE | Direct conditional |
+          | 4 | `env` + allowlist validation | ✅ SAFE | Reject unexpected input early |
 
           ## Try These Test Inputs
 
@@ -123,6 +139,7 @@ jobs:
           ### Injection Attempts (for testing)
           ```
           test"; echo INJECTED #
+          echo INJECTED
           test$(whoami)test
           test && echo INJECTED
           ```
