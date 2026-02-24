@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  # パターン1: 直接 ${{ }} を使う（最も危険）
+  # パターン1: 直接 $ {{ }} を使う（最も危険）
   pattern-1-direct:
     runs-on: ubuntu-latest
     steps:
@@ -35,11 +35,16 @@ jobs:
       - name: "🔴 Pattern 2: env + command substitution (STILL DANGEROUS)"
         run: |
           echo "=========================================="
-          echo "Pattern 2: env with \$(...)"
+          echo "Pattern 2: env + bash -c (RE-PARSES INPUT)"
           echo "Input from env: ${MALICIOUS_INPUT}"
           echo "=========================================="
-          result="$(echo "Processing: ${MALICIOUS_INPUT}")"
-          echo "Result: ${result}"
+          echo "Safe reference (no re-parse):"
+          safe_result="$(echo "Processing: ${MALICIOUS_INPUT}")"
+          echo "safe_result: ${safe_result}"
+          echo ""
+          echo "Unsafe reference (bash parses a command string):"
+          result="$(bash -c "echo Processing: ${MALICIOUS_INPUT}")"
+          echo "result: ${result}"
           echo ""
 
   # パターン3: env経由のみ（安全）
@@ -100,7 +105,7 @@ jobs:
           | Pattern | Method | Safety | Notes |
           |---------|--------|--------|-------|
           | 1 | `$ {{ }}` in run | 🔴 DANGEROUS | Shell interprets immediately |
-          | 2 | `env` + `$(...)` | 🔴 DANGEROUS | Command substitution re-interprets |
+          | 2 | `env` + `bash -c "...${VAR}..."` | 🔴 DANGEROUS | Input gets re-parsed as code |
           | 3 | `env` only | ✅ SAFE | No re-interpretation |
           | 4 | `env` + `if` | ✅ SAFE | Direct conditional |
 
@@ -122,7 +127,7 @@ jobs:
 
           **Using `env:` is necessary but not sufficient!**
 
-          - ❌ `result=$(command "${ENV_VAR}")` ← Still vulnerable
+          - ❌ `bash -c "cmd ${ENV_VAR}"` / `eval "cmd ${ENV_VAR}"` ← Re-parses input
           - ✅ `if command "${ENV_VAR}"; then` ← Safe
           - ✅ `echo "${ENV_VAR}"` ← Safe
 
@@ -135,14 +140,16 @@ jobs:
           echo "Why is Pattern 2 still dangerous?"
           echo "=========================================="
           echo ""
-          echo "Even with env, this happens:"
-          echo "1. GitHub sets: MALICIOUS_INPUT='test\"; echo INJECTED #'"
-          echo "2. Shell sees: result=\"\$(echo \"Processing: \${MALICIOUS_INPUT}\")\""
-          echo "3. Shell expands: result=\"\$(echo \"Processing: test\"; echo INJECTED #\")\""
-          echo "4. Shell executes inside \$():"
-          echo "   - echo \"Processing: test\""
-          echo "   - echo INJECTED"
-          echo "   - # (comment)"
+          echo "Key point: injection needs *re-parsing* (eval / bash -c)."
           echo ""
-          echo "The \$(...) causes the shell to re-interpret!"
+          echo "Even with env, this is dangerous:"
+          echo "1. GitHub sets: MALICIOUS_INPUT='test\"; echo INJECTED #'"
+          echo "2. Outer shell builds a command string for bash -c:"
+          echo "   bash -c \"echo Processing: ${MALICIOUS_INPUT}\""
+          echo "3. That becomes: bash -c \"echo Processing: test\"; echo INJECTED #\""
+          echo "4. Inner bash parses and runs:"
+          echo "   - echo Processing: test"
+          echo "   - echo INJECTED"
+          echo ""
+          echo "In contrast, plain: echo \"${MALICIOUS_INPUT}\" does not re-parse it as code."
           echo ""
