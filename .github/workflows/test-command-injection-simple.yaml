@@ -43,8 +43,12 @@ jobs:
           echo "safe_result: ${safe_result}"
           echo ""
           echo "Unsafe reference (bash parses a command string):"
-          result="$(bash -c "echo Processing: ${MALICIOUS_INPUT}")"
-          echo "result: ${result}"
+          set +e
+          unsafe_output="$(bash -c "echo \"Processing: ${MALICIOUS_INPUT}\"" 2>&1)"
+          unsafe_status=$?
+          set -e
+          echo "unsafe_status: ${unsafe_status}"
+          echo "unsafe_output: ${unsafe_output}"
           echo ""
 
   # パターン3: env経由のみ（安全）
