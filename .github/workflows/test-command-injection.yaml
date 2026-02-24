@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: "🔴 UNSAFE: Direct interpolation in run"
         run: |
-          echo "=== Test 1: Direct \${{ }} in run (UNSAFE) ==="
+          echo "=== Test 1: Direct $ {{ }} in run (UNSAFE) ==="
           echo "Input: ${{ inputs.test_input }}"
           echo "Result: $(echo "Processing: ${{ inputs.test_input }}")"
           echo "---"
@@ -212,7 +212,7 @@ jobs:
           ## Patterns Tested
 
           ### 🔴 Unsafe Patterns
-          1. **Direct `${{ }}` in run**: Immediately dangerous
+          1. **Direct `$ {{ }}` in run**: Immediately dangerous
           2. **env + `$(...)` command substitution**: Still vulnerable
           3. **env + logical operators**: Potentially vulnerable
 
@@ -232,7 +232,7 @@ jobs:
 
           ✅ **DO**: Use `env:` + direct commands or `if` statements
           ❌ **DON'T**: Use `$(...)` or backticks with external input
-          ❌ **DON'T**: Use `${{ }}` directly in `run:` blocks
+          ❌ **DON'T**: Use `$ {{ ... }}` directly in `run:` blocks
 
           ## Example Safe Pattern
 
