@@ -16,7 +16,7 @@ jobs:
   pattern-1-direct:
     runs-on: ubuntu-latest
     steps:
-      - name: "🔴 Pattern 1: Direct \${{ }} in run (MOST DANGEROUS)"
+      - name: "🔴 Pattern 1: Direct $ {{ }} in run (MOST DANGEROUS)"
         run: |
           echo "=========================================="
           echo "Pattern 1: Direct interpolation"
@@ -99,7 +99,7 @@ jobs:
 
           | Pattern | Method | Safety | Notes |
           |---------|--------|--------|-------|
-          | 1 | `${{ }}` in run | 🔴 DANGEROUS | Shell interprets immediately |
+          | 1 | `$ {{ }}` in run | 🔴 DANGEROUS | Shell interprets immediately |
           | 2 | `env` + `$(...)` | 🔴 DANGEROUS | Command substitution re-interprets |
           | 3 | `env` only | ✅ SAFE | No re-interpretation |
           | 4 | `env` + `if` | ✅ SAFE | Direct conditional |
